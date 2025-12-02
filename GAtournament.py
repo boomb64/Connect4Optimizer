@@ -267,59 +267,80 @@ def mutate(weights):
 
 # --- MAIN DRIVER ---
 if __name__ == "__main__":
-    # Required for Windows multiprocessing
     multiprocessing.freeze_support()
+
+    # SETUP: INCREASED ACCURACY
+    OPPONENTS_PER_GEN = 5  # Each bot plays 5 random opponents now (instead of 1)
+    POPULATION_SIZE = 32  # Keep this size
+    GENERATIONS = 15  # Slightly longer to allow convergence
 
     print(f"--- GENETIC OPTIMIZATION STARTING ---")
     print(f"Population: {POPULATION_SIZE} | Depth: {SEARCH_DEPTH} | Cores: {multiprocessing.cpu_count()}")
+    print(f"Strategy: Each bot plays {OPPONENTS_PER_GEN} opponents per generation to reduce luck.")
 
     population = create_initial_population(POPULATION_SIZE)
 
     for gen in range(GENERATIONS):
         print(f"\nGENERATION {gen + 1}/{GENERATIONS}")
 
-        # 1. Create Matchups (Random Pairings)
+        # 1. Create Matchups (The Gauntlet)
+        # Every bot plays 'OPPONENTS_PER_GEN' random other bots
         matchups = []
-        random.shuffle(population)
-        for i in range(0, len(population), 2):
-            matchups.append((population[i], population[i + 1]))
+        indices = list(range(POPULATION_SIZE))
+
+        for _ in range(OPPONENTS_PER_GEN):
+            random.shuffle(indices)
+            # Create pairs from the shuffled list
+            for i in range(0, POPULATION_SIZE, 2):
+                p1 = population[indices[i]]
+                p2 = population[indices[i + 1]]
+                matchups.append((p1, p2))
 
         # 2. Run Matches in Parallel
         with multiprocessing.Pool() as pool:
             results = pool.map(play_match, matchups)
 
-        # 3. Update Scores
-        # Reset scores first? Or keep cumulative? Let's reset for fresh evaluation
-        score_map = {}
+        # 3. Update Scores (Accumulate over all games)
+        score_map = {p['id']: 0 for p in population}
+
         for r in results:
             (id1, s1), (id2, s2) = r
-            score_map[id1] = s1
-            score_map[id2] = s2
+            score_map[id1] += s1
+            score_map[id2] += s2
 
         for p in population:
-            p['score'] = score_map.get(p['id'], 0)
+            # Update score (resetting previous gen score, keeping only this gen's performance)
+            p['score'] = score_map[p['id']]
 
-        # 4. Selection (Sort by score)
+        # 4. Selection
         population.sort(key=lambda x: x['score'], reverse=True)
         top_half = population[:POPULATION_SIZE // 2]
 
-        print(f"Best Bot Gen {gen}: {top_half[0]['weights']} (Score: {top_half[0]['score']})")
+        # Print the "Alpha" of this generation
+        best = top_half[0]
+        print(f"Best Bot: {best['weights']} (Score: {best['score']}/{OPPONENTS_PER_GEN * 2})")
 
-        # 5. Reproduction (Top half replicates and mutates)
+        # 5. Reproduction
         next_gen = []
         for parent in top_half:
-            # Parent survives
-            parent['score'] = 0  # Reset for next gen
+            # Elite Preservation (The parent survives unchanged)
+            parent['score'] = 0
             next_gen.append(parent)
 
-            # Child is born (Clone + Mutate)
+            # Mutation (Child is born)
             child_weights = mutate(parent['weights'])
-            child = {'id': len(next_gen) + len(top_half) * gen, 'weights': child_weights, 'score': 0}
+
+            # --- FIX: USE A ROBUST ID GENERATOR ---
+            # We use the length of next_gen + a huge offset based on generation + 1
+            # This guarantees children never share IDs with parents
+            new_id = len(next_gen) + ((gen + 1) * 10000)
+
+            child = {'id': new_id, 'weights': child_weights, 'score': 0}
             next_gen.append(child)
 
         population = next_gen
 
     print("\n--- OPTIMIZATION COMPLETE ---")
-    print("Top 3 Weight Configurations:")
+    print("Top 3 Converged Configurations:")
     for i in range(3):
         print(f"#{i + 1}: {population[i]['weights']}")
