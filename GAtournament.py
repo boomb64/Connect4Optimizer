@@ -321,8 +321,11 @@ if __name__ == "__main__":
         best = top_half[0]
         print(f"Best Bot: {best['weights']} (Score: {best['score']}/{OPPONENTS_PER_GEN * 2})")
 
+<<<<<<< HEAD
         # ... inside the main loop ...
 
+=======
+>>>>>>> c5956db919b7a7e8d386c2b2cb36b6562ac47789
         # 5. Reproduction
         next_gen = []
         for parent in top_half:

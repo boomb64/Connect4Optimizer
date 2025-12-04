@@ -31,7 +31,6 @@ W_THREE = 1        # Value of getting 3-in-a-row
 W_TWO = 8          # Value of getting 2-in-a-row
 
 # DEFENSE WEIGHT: How much it hates the opponent getting 3-in-a-row
-# If you make this huge (e.g., 100), the AI becomes very defensive.
 W_BLOCK = 29
 
 # --- PYGAME SETUP ---
@@ -307,4 +306,4 @@ while not game_over:
             turn = turn % 2
 
     if game_over:
-        pygame.time.wait(3000)  # Wait 3 seconds before closing
+        pygame.time.wait(7000)  # Wait 3 seconds before closing
