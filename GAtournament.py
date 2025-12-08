@@ -17,10 +17,11 @@ WINDOW_LENGTH = 4
 POPULATION_SIZE = 32  # Must be even number
 GENERATIONS = 10  # How many times to evolve
 GAMES_PER_MATCHUP = 2  # Low number for speed (1 as P1, 1 as P2)
-SEARCH_DEPTH = 7  # RECOMMENDATION: Train at Depth 4, Verify at Depth 7
+SEARCH_DEPTH = 7  # How many moves ahead the model is seeing
 
-
-# Depth 7 is too slow for training (hours vs minutes)
+# Depth 7 is too slow for training. I recommend depth 4,
+# however, I trained my model on a depth of 7 and allowed it to run for hours
+# running it more could improve results.
 
 # --- GAME ENGINE (HEADLESS & FAST) ---
 def create_board():
@@ -79,7 +80,7 @@ def is_terminal_node(board):
     return check_win(board, PLAYER_1_PIECE) or check_win(board, PLAYER_2_PIECE) or len(get_valid_locations(board)) == 0
 
 
-# --- AI LOGIC ---
+# --- LOGIC ---
 def evaluate_window(window, piece, weights):
     score = 0
     opp_piece = PLAYER_1_PIECE if piece == PLAYER_2_PIECE else PLAYER_2_PIECE
@@ -321,11 +322,6 @@ if __name__ == "__main__":
         best = top_half[0]
         print(f"Best Bot: {best['weights']} (Score: {best['score']}/{OPPONENTS_PER_GEN * 2})")
 
-<<<<<<< HEAD
-        # ... inside the main loop ...
-
-=======
->>>>>>> c5956db919b7a7e8d386c2b2cb36b6562ac47789
         # 5. Reproduction
         next_gen = []
         for parent in top_half:
@@ -336,8 +332,6 @@ if __name__ == "__main__":
             # Mutation (Child is born)
             child_weights = mutate(parent['weights'])
 
-            # --- FIX: USE A ROBUST ID GENERATOR ---
-            # We use the length of next_gen + a huge offset based on generation + 1
             # This guarantees children never share IDs with parents
             new_id = len(next_gen) + ((gen + 1) * 10000)
 

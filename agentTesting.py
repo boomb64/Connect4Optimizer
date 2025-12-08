@@ -1,18 +1,13 @@
 import numpy as np
-import pygame
-import sys
 import math
 import random
+import sys
 
 # --- CONFIGURATION & CONSTANTS ---
-BLUE = (0, 0, 255)
-BLACK = (0, 0, 0)
-RED = (255, 0, 0)
-YELLOW = (255, 255, 0)
-
 ROW_COUNT = 6
 COLUMN_COUNT = 7
 
+# 0 = Greedy Agent (Depth 1), 1 = Optimization AI (Depth 4)
 PLAYER = 0
 AI = 1
 
@@ -22,23 +17,17 @@ AI_PIECE = 2
 
 WINDOW_LENGTH = 4
 
-# --- OPTIMIZATION WEIGHTS (HYPERPARAMETERS) ---
-# Adjust these numbers to adjust how the model plays
+# SIMULATION SETTINGS
+TOTAL_GAMES = 20
+MINIMAX_DEPTH = 4  # The "Deep Thinker"
 
-W_CENTER = 3        # Preference for playing in the middle column
-W_WIN = 100        # Value of getting 4-in-a-row
-W_THREE = 1        # Value of getting 3-in-a-row
-W_TWO = 8          # Value of getting 2-in-a-row
-
-# DEFENSE WEIGHT: How much it hates the opponent getting 3-in-a-row
+# --- OPTIMIZATION WEIGHTS ---
+# Both agents use these weights, so it is a fair test of Intelligence vs. Speed
+W_CENTER = 3
+W_WIN = 100
+W_THREE = 1
+W_TWO = 8
 W_BLOCK = 29
-
-# --- PYGAME SETUP ---
-SQUARESIZE = 100
-width = COLUMN_COUNT * SQUARESIZE
-height = (ROW_COUNT + 1) * SQUARESIZE
-size = (width, height)
-RADIUS = int(SQUARESIZE / 2 - 5)
 
 
 # --- GAME LOGIC FUNCTIONS ---
@@ -61,10 +50,6 @@ def get_next_open_row(board, col):
             return r
 
 
-def print_board(board):
-    print(np.flip(board, 0))
-
-
 def winning_move(board, piece):
     # Check horizontal locations for win
     for c in range(COLUMN_COUNT - 3):
@@ -80,7 +65,7 @@ def winning_move(board, piece):
                 c] == piece:
                 return True
 
-    # Check positively sloped diagonals
+    # Check positively sloped diaganols
     for c in range(COLUMN_COUNT - 3):
         for r in range(ROW_COUNT - 3):
             if board[r][c] == piece and board[r + 1][c + 1] == piece and board[r + 2][c + 2] == piece and board[r + 3][
@@ -95,14 +80,14 @@ def winning_move(board, piece):
                 return True
 
 
-# --- OPTIMIZATION ENGINE (AI) ---
+# --- OPTIMIZATION ENGINE (Evaluation Function) ---
 def evaluate_window(window, piece):
     score = 0
     opp_piece = PLAYER_PIECE
     if piece == PLAYER_PIECE:
         opp_piece = AI_PIECE
 
-    # OFFENSE: Check for our connections
+    # OFFENSE
     if window.count(piece) == 4:
         score += W_WIN
     elif window.count(piece) == 3 and window.count(EMPTY) == 1:
@@ -110,16 +95,15 @@ def evaluate_window(window, piece):
     elif window.count(piece) == 2 and window.count(EMPTY) == 2:
         score += W_TWO
 
-    # DEFENSE: Check for opponent connections
+    # DEFENSE
     if window.count(opp_piece) == 3 and window.count(EMPTY) == 1:
-        score -= W_BLOCK  # Subtract points (penalize letting opponent get 3)
+        score -= W_BLOCK
 
     return score
 
 
 def score_position(board, piece):
     score = 0
-
     # Score Center Column
     center_array = [int(i) for i in list(board[:, COLUMN_COUNT // 2])]
     center_count = center_array.count(piece)
@@ -165,6 +149,26 @@ def get_valid_locations(board):
     return valid_locations
 
 
+# --- GREEDY AGENT (DEPTH 1) ---
+def pick_best_move(board, piece):
+    valid_locations = get_valid_locations(board)
+    best_score = -math.inf
+    best_col = random.choice(valid_locations)
+
+    for col in valid_locations:
+        row = get_next_open_row(board, col)
+        temp_board = board.copy()
+        drop_piece(temp_board, row, col, piece)
+        score = score_position(temp_board, piece)
+
+        if score > best_score:
+            best_score = score
+            best_col = col
+
+    return best_col
+
+
+# --- MINIMAX AGENT (DEPTH 4) ---
 def minimax(board, depth, alpha, beta, maximizingPlayer):
     valid_locations = get_valid_locations(board)
     is_terminal = is_terminal_node(board)
@@ -175,9 +179,9 @@ def minimax(board, depth, alpha, beta, maximizingPlayer):
                 return (None, 100000000000000)
             elif winning_move(board, PLAYER_PIECE):
                 return (None, -10000000000000)
-            else:  # Game is over, no more valid moves
+            else:
                 return (None, 0)
-        else:  # Depth is zero
+        else:
             return (None, score_position(board, AI_PIECE))
 
     if maximizingPlayer:
@@ -196,7 +200,7 @@ def minimax(board, depth, alpha, beta, maximizingPlayer):
                 break
         return column, value
 
-    else:  # Minimizing player
+    else:  # Minimizing Player
         value = math.inf
         column = random.choice(valid_locations)
         for col in valid_locations:
@@ -213,98 +217,61 @@ def minimax(board, depth, alpha, beta, maximizingPlayer):
         return column, value
 
 
-def draw_board(board):
-    for c in range(COLUMN_COUNT):
-        for r in range(ROW_COUNT):
-            # Draw the blue square
-            pygame.draw.rect(screen, BLUE, (c * SQUARESIZE, r * SQUARESIZE + SQUARESIZE, SQUARESIZE, SQUARESIZE))
-            # Draw the empty black circle
-            pygame.draw.circle(screen, BLACK, (int(c * SQUARESIZE + SQUARESIZE / 2),
-                                               int(r * SQUARESIZE + SQUARESIZE + SQUARESIZE / 2)), RADIUS)
+# --- MAIN EXECUTION (HEADLESS SIMULATION) ---
+if __name__ == "__main__":
+    ai_wins = 0
+    greedy_wins = 0
+    draws = 0
 
-    for c in range(COLUMN_COUNT):
-        for r in range(ROW_COUNT):
-            # Draw Player pieces (Red)
-            if board[r][c] == PLAYER_PIECE:
-                pygame.draw.circle(screen, RED, (int(c * SQUARESIZE + SQUARESIZE / 2),
-                                                 height - int(r * SQUARESIZE + SQUARESIZE / 2)), RADIUS)
-            # Draw AI pieces (Yellow)
-            elif board[r][c] == AI_PIECE:
-                pygame.draw.circle(screen, YELLOW, (int(c * SQUARESIZE + SQUARESIZE / 2),
-                                                    height - int(r * SQUARESIZE + SQUARESIZE / 2)), RADIUS)
-    pygame.display.update()
+    print(f"--- STARTING VERIFICATION: AI (Depth {MINIMAX_DEPTH}) vs GREEDY (Depth 1) ---")
+    print(f"Games to Play: {TOTAL_GAMES}")
+    print("Running...")
 
+    for game in range(TOTAL_GAMES):
+        board = create_board()
+        game_over = False
+        turn = random.randint(PLAYER, AI)  # Randomize who starts
 
-# --- MAIN EXECUTION ---
-board = create_board()
-print_board(board)
-game_over = False
-turn = random.randint(PLAYER, AI)
+        while not game_over:
+            # Check for draw
+            if len(get_valid_locations(board)) == 0:
+                draws += 1
+                break
 
-pygame.init()
-screen = pygame.display.set_mode(size)
-draw_board(board)
-pygame.display.update()
-pygame.display.set_caption("Connect 4 - Optimization Project")
-
-myfont = pygame.font.SysFont("monospace", 75)
-
-while not game_over:
-
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            sys.exit()
-
-        if event.type == pygame.MOUSEMOTION:
-            pygame.draw.rect(screen, BLACK, (0, 0, width, SQUARESIZE))
-            posx = event.pos[0]
             if turn == PLAYER:
-                pygame.draw.circle(screen, RED, (posx, int(SQUARESIZE / 2)), RADIUS)
-            pygame.display.update()
-
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            pygame.draw.rect(screen, BLACK, (0, 0, width, SQUARESIZE))
-            # Player 1 Input
-            if turn == PLAYER:
-                posx = event.pos[0]
-                col = int(math.floor(posx / SQUARESIZE))
+                # --- GREEDY AGENT LOGIC (Depth 1) ---
+                col = pick_best_move(board, PLAYER_PIECE)
 
                 if is_valid_location(board, col):
                     row = get_next_open_row(board, col)
                     drop_piece(board, row, col, PLAYER_PIECE)
 
                     if winning_move(board, PLAYER_PIECE):
-                        label = myfont.render("Player 1 Wins!!", 1, RED)
-                        screen.blit(label, (40, 10))
+                        greedy_wins += 1
                         game_over = True
 
                     turn += 1
                     turn = turn % 2
 
-                    draw_board(board)
+            elif turn == AI:
+                # --- MINIMAX AGENT LOGIC (Depth 4) ---
+                col, minimax_score = minimax(board, MINIMAX_DEPTH, -math.inf, math.inf, True)
 
-    # # AI Input (runs automatically if it is AI turn)
-    if turn == AI and not game_over:
-        # Runs minimax on a depth of 7
-        col, minimax_score = minimax(board, 7, -math.inf, math.inf, True)
+                if is_valid_location(board, col):
+                    row = get_next_open_row(board, col)
+                    drop_piece(board, row, col, AI_PIECE)
 
-        if is_valid_location(board, col):
-            # Adds a small delay to make it not seem instant
-            pygame.time.wait(500)
+                    if winning_move(board, AI_PIECE):
+                        ai_wins += 1
+                        game_over = True
 
-            row = get_next_open_row(board, col)
-            drop_piece(board, row, col, AI_PIECE)
+                    turn += 1
+                    turn = turn % 2
 
-            if winning_move(board, AI_PIECE):
-                label = myfont.render("AI Wins!!", 1, YELLOW)
-                screen.blit(label, (40, 10))
-                game_over = True
+        print(f"Game {game + 1}/{TOTAL_GAMES} Finished. (AI: {ai_wins}, Greedy: {greedy_wins})")
 
-            draw_board(board)
-
-            turn += 1
-            turn = turn % 2
-
-    if game_over:
-        #waits 7 seconds before closing
-        pygame.time.wait(7000)
+    print("\n--- FINAL RESULTS ---")
+    print(f"Total Games: {TOTAL_GAMES}")
+    print(f"AI Wins (Depth 4):     {ai_wins} ({(ai_wins / TOTAL_GAMES) * 100}%)")
+    print(f"Greedy Wins (Depth 1): {greedy_wins}")
+    print(f"Draws:                 {draws}")
